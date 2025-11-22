@@ -19,6 +19,7 @@ interface Report {
   commitment: string | null
   generatedAt: string
   sessionDuration?: number
+  sessionId?: number
 }
 
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,37 +40,22 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
   const fetchReport = async () => {
     try {
-      // 这里应该调用 API 获取报告
-      // 为简化演示，使用模拟数据
-      setTimeout(() => {
-        setReport({
-          id: parseInt(reportId),
-          topic: '项目延期问题突破',
-          insights: [
-            '我发现我总是在回避和 A 的沟通,这是导致误解的主要原因',
-            '我其实有能力推动这件事,只是一直在等待"完美时机"',
-            '团队成员可能比我想象的更愿意帮助',
-          ],
-          actionPlans: [
-            {
-              when: '明天下午 3 点前',
-              what: '主动约 A 进行 15 分钟沟通',
-              specific: '澄清关于需求优先级的误解',
-            },
-            {
-              when: '本周五前',
-              what: '完成项目风险评估文档',
-              specific: '列出 Top 3 风险和应对方案',
-            },
-          ],
-          commitment: '完成后,我将在周末去看一部期待已久的电影',
-          generatedAt: new Date().toISOString(),
-          sessionDuration: 25,
-        })
-        setLoading(false)
-      }, 1000)
+      const response = await fetch(`/api/reports/${reportId}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch report')
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.report) {
+        setReport(data.report)
+      } else {
+        throw new Error(data.error || 'Report not found')
+      }
     } catch (error) {
       console.error('Failed to fetch report:', error)
+    } finally {
       setLoading(false)
     }
   }
@@ -163,19 +149,25 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                   关键观察与洞察
                 </h2>
               </div>
-              <div className="space-y-3">
-                {report.insights.map((insight, index) => (
-                  <div
-                    key={index}
-                    className="flex gap-3 p-4 bg-gray-50 rounded-lg"
-                  >
-                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-medium">
-                      {index + 1}
-                    </span>
-                    <p className="text-gray-700 leading-relaxed">{insight}</p>
-                  </div>
-                ))}
-              </div>
+              {report.insights.length > 0 ? (
+                <div className="space-y-3">
+                  {report.insights.map((insight, index) => (
+                    <div
+                      key={index}
+                      className="flex gap-3 p-4 bg-gray-50 rounded-lg"
+                    >
+                      <span className="flex-shrink-0 w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-medium">
+                        {index + 1}
+                      </span>
+                      <p className="text-gray-700 leading-relaxed">{insight}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
+                  对话中未明确提及关键洞察
+                </div>
+              )}
             </section>
 
             {/* 下一步行动计划 */}
@@ -186,25 +178,31 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                   下一步行动计划
                 </h2>
               </div>
-              <div className="space-y-4">
-                {report.actionPlans.map((plan, index) => (
-                  <div
-                    key={index}
-                    className="border-l-4 border-green-500 pl-4 py-2"
-                  >
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-1" />
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">{plan.when}</p>
-                        <p className="font-medium text-gray-900 mb-1">
-                          {plan.what}
-                        </p>
-                        <p className="text-sm text-gray-600">{plan.specific}</p>
+              {report.actionPlans.length > 0 ? (
+                <div className="space-y-4">
+                  {report.actionPlans.map((plan, index) => (
+                    <div
+                      key={index}
+                      className="border-l-4 border-green-500 pl-4 py-2"
+                    >
+                      <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-1" />
+                        <div>
+                          <p className="text-sm text-gray-500 mb-1">{plan.when}</p>
+                          <p className="font-medium text-gray-900 mb-1">
+                            {plan.what}
+                          </p>
+                          <p className="text-sm text-gray-600">{plan.specific}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
+                  对话中未明确提及具体行动计划
+                </div>
+              )}
             </section>
 
             {/* 承诺与奖赏 */}
@@ -241,12 +239,14 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
           >
             返回首页
           </button>
-          <button
-            onClick={() => router.push(`/chat/${report.id}`)}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-          >
-            查看完整对话
-          </button>
+          {report.sessionId && (
+            <button
+              onClick={() => router.push(`/chat/${report.sessionId}`)}
+              className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              查看完整对话
+            </button>
+          )}
         </div>
       </div>
     </div>
