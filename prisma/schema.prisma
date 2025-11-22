@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 1. 用户表
+model User {
+  id                    Int       @id @default(autoincrement())
+  username              String    @unique
+  email                 String?
+  role                  String?   // '团队负责人/管理者', '核心骨干/资深专家', '团队成员/执行者'
+  businessLine          String?   // '技术/研发', '产品/运营', etc.
+  workStyle             String?   // '数据驱动,逻辑严谨', etc.
+  developmentGoal       String?
+  workChallenge         String?
+  onboardingCompleted   Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  sessions              Session[]
+  summaryReports        SummaryReport[]
+  feedback              Feedback[]
+
+  @@map("users")
+}
+
+// 2. 对话会话表
+model Session {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  scenario        String    // 'work_problem', 'career_development'
+  status          String    @default("in_progress") // 'in_progress', 'completed', 'abandoned'
+  currentPhase    String?   // 'goal', 'reality', 'options', 'will'
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  durationMinutes Int?
+  messageCount    Int       @default(0)
+
+  user            User      @relation(fields: [userId], references: [id])
+  messages        Message[]
+  summaryReport   SummaryReport?
+
+  @@map("sessions")
+}
+
+// 3. 对话消息表
+model Message {
+  id            Int       @id @default(autoincrement())
+  sessionId     Int
+  role          String    // 'user', 'assistant'
+  content       String
+  phase         String?   // 对应 GROW 的阶段
+  hasButtons    Boolean   @default(false)
+  buttonOptions String?   // JSON 格式存储按钮选项
+  createdAt     DateTime  @default(now())
+
+  session       Session   @relation(fields: [sessionId], references: [id])
+
+  @@map("messages")
+}
+
+// 4. 总结报告表
+model SummaryReport {
+  id            Int       @id @default(autoincrement())
+  sessionId     Int       @unique
+  userId        Int
+  topic         String    // 本次教练议题
+  insights      String    // JSON 格式存储关键观察（数组）
+  actionPlans   String    // JSON 格式存储行动计划（数组）
+  commitment    String?   // 承诺与奖赏
+  generatedAt   DateTime  @default(now())
+
+  session       Session   @relation(fields: [sessionId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@map("summary_reports")
+}
+
+// 5. 匿名行为分析日志表（用于未来数据看板）
+model AnalyticsLog {
+  id              Int       @id @default(autoincrement())
+  eventType       String    // 'session_start', 'session_complete', 'report_generated', etc.
+  scenario        String?   // 场景类型
+  phase           String?   // GROW 阶段
+  durationSeconds Int?
+  metadata        String?   // JSON 格式存储其他分析数据
+  createdAt       DateTime  @default(now())
+
+  @@map("analytics_logs")
+}
+
+// 6. 用户反馈表
+model Feedback {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  sessionId     Int?
+  npsScore      Int?      // 0-10 分
+  feedbackText  String?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@map("feedback")
+}
+
+// 7. 系统配置表
+model Setting {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique
+  value       String?
+  description String?
+  updatedAt   DateTime  @updatedAt
+
+  @@map("settings")
+}
